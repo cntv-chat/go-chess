@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../socket.js';
 import Board from '../components/Board.jsx';
 
@@ -7,22 +6,14 @@ const BLACK = 1, WHITE = 2;
 
 const styles = {
   page: { display: 'flex', gap: 24, justifyContent: 'center', paddingTop: 24, flexWrap: 'wrap' },
-  sidebar: {
-    width: 260, display: 'flex', flexDirection: 'column', gap: 16,
-  },
+  sidebar: { width: 260, display: 'flex', flexDirection: 'column', gap: 16 },
   infoCard: {
     background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 20,
     border: '1px solid rgba(255,255,255,0.08)',
   },
-  playerRow: {
-    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-  },
-  stone: {
-    width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-  },
-  activePlayer: {
-    boxShadow: '0 0 0 3px #667eea',
-  },
+  playerRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' },
+  stone: { width: 20, height: 20, borderRadius: '50%', flexShrink: 0 },
+  activePlayer: { boxShadow: '0 0 0 3px #667eea' },
   playerName: { fontSize: 15, fontWeight: 600 },
   captures: { fontSize: 13, color: '#999', marginLeft: 'auto' },
   status: {
@@ -42,26 +33,27 @@ const styles = {
   resultDetail: { fontSize: 14, color: '#aaa', marginBottom: 16 },
 };
 
-export default function Game({ user, token }) {
-  const navigate = useNavigate();
-  const [game, setGame] = useState(null);
+export default function Game({ user, token, game: initialGame, onGameUpdate, onBack }) {
+  const [game, setGame] = useState(initialGame);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const socket = getSocket(token);
 
-    socket.on('game:start', setGame);
-    socket.on('game:update', setGame);
-    socket.on('game:end', setGame);
-    socket.on('error', (msg) => { setError(msg); setTimeout(() => setError(''), 3000); });
+    const handleUpdate = (g) => { setGame(g); onGameUpdate(g); };
+    const handleEnd = (g) => { setGame(g); onGameUpdate(g); };
+    const handleError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000); };
+
+    socket.on('game:update', handleUpdate);
+    socket.on('game:end', handleEnd);
+    socket.on('error', handleError);
 
     return () => {
-      socket.off('game:start', setGame);
-      socket.off('game:update', setGame);
-      socket.off('game:end', setGame);
-      socket.off('error');
+      socket.off('game:update', handleUpdate);
+      socket.off('game:end', handleEnd);
+      socket.off('error', handleError);
     };
-  }, [token]);
+  }, [token, onGameUpdate]);
 
   const handleMove = useCallback((x, y) => {
     const socket = getSocket(token);
@@ -80,11 +72,7 @@ export default function Game({ user, token }) {
     }
   };
 
-  const goBack = () => navigate('/');
-
-  if (!game) {
-    return <div style={{ textAlign: 'center', paddingTop: 80, color: '#999' }}>加载中...</div>;
-  }
+  if (!game) return null;
 
   const isMyTurn = game.status === 'playing' && (
     (game.currentColor === BLACK && game.players.black.username === user.username) ||
@@ -111,12 +99,10 @@ export default function Game({ user, token }) {
         lastMove={lastMove}
       />
       <div style={styles.sidebar}>
-        {/* Players */}
         <div style={styles.infoCard}>
           <div style={styles.playerRow}>
             <div style={{
-              ...styles.stone,
-              background: '#222',
+              ...styles.stone, background: '#222',
               ...(game.currentColor === BLACK && game.status === 'playing' ? styles.activePlayer : {}),
             }} />
             <span style={styles.playerName}>{game.players.black.username || '黑方'}</span>
@@ -124,8 +110,7 @@ export default function Game({ user, token }) {
           </div>
           <div style={styles.playerRow}>
             <div style={{
-              ...styles.stone,
-              background: '#eee',
+              ...styles.stone, background: '#eee',
               ...(game.currentColor === WHITE && game.status === 'playing' ? styles.activePlayer : {}),
             }} />
             <span style={styles.playerName}>{game.players.white.username || '白方'}</span>
@@ -133,12 +118,10 @@ export default function Game({ user, token }) {
           </div>
         </div>
 
-        {/* Status */}
         <div style={styles.status}>
           {error ? <span style={{ color: '#f44336' }}>{error}</span> : statusText}
         </div>
 
-        {/* Result */}
         {game.status === 'ended' && game.result && (
           <div style={styles.result}>
             <div style={styles.resultTitle}>
@@ -151,23 +134,17 @@ export default function Game({ user, token }) {
               {game.result.reason === 'resign' && '对方认输'}
               {game.result.reason === 'disconnect' && '对方断线'}
             </div>
-            <button className="btn-primary" onClick={goBack}>返回大厅</button>
+            <button className="btn-primary" onClick={onBack}>返回大厅</button>
           </div>
         )}
 
-        {/* Actions */}
         {game.status === 'playing' && (
           <div style={styles.actions}>
-            <button className="btn-secondary" onClick={handlePass}>
-              跳过 (Pass)
-            </button>
-            <button className="btn-danger" onClick={handleResign}>
-              认输
-            </button>
+            <button className="btn-secondary" onClick={handlePass}>跳过 (Pass)</button>
+            <button className="btn-danger" onClick={handleResign}>认输</button>
           </div>
         )}
 
-        {/* Move history */}
         {game.moves.length > 0 && (
           <div style={styles.infoCard}>
             <div style={{ fontSize: 13, color: '#999', marginBottom: 8 }}>落子记录 ({game.moves.length}手)</div>

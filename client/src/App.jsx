@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import Lobby from './pages/Lobby.jsx';
 import Game from './pages/Game.jsx';
+import { disconnectSocket } from './socket.js';
 
 function App() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [game, setGame] = useState(null);
 
   useEffect(() => {
     if (token) {
@@ -17,37 +18,60 @@ function App() {
     }
   }, [token]);
 
-  const handleLogin = (token, user) => {
-    localStorage.setItem('token', token);
-    setToken(token);
-    setUser(user);
+  const handleLogin = (t, u) => {
+    localStorage.setItem('token', t);
+    setToken(t);
+    setUser(u);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
+    setGame(null);
+    disconnectSocket();
   };
 
+  const handleGameStart = (g) => setGame(g);
+  const handleGameUpdate = (g) => setGame(g);
+  const handleBackToLobby = () => setGame(null);
+
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
-    <BrowserRouter>
-      {user && (
-        <div className="header">
-          <h1>⚫ 围棋对战 ⚪</h1>
-          <div className="header-user">
-            <span>{user.username}</span>
-            <button className="btn-secondary" onClick={handleLogout}>退出</button>
-          </div>
+    <>
+      <div className="header">
+        <h1>⚫ 围棋对战 ⚪</h1>
+        <div className="header-user">
+          {game && (
+            <button className="btn-secondary" onClick={handleBackToLobby} style={{ marginRight: 8 }}>
+              返回大厅
+            </button>
+          )}
+          <span>{user.username}</span>
+          <button className="btn-secondary" onClick={handleLogout}>退出</button>
         </div>
-      )}
-      <div className="container">
-        <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={handleLogin} />} />
-          <Route path="/" element={user ? <Lobby user={user} token={token} /> : <Navigate to="/login" />} />
-          <Route path="/game/:gameId" element={user ? <Game user={user} token={token} /> : <Navigate to="/login" />} />
-        </Routes>
       </div>
-    </BrowserRouter>
+      <div className="container">
+        {game ? (
+          <Game
+            user={user}
+            token={token}
+            game={game}
+            onGameUpdate={handleGameUpdate}
+            onBack={handleBackToLobby}
+          />
+        ) : (
+          <Lobby
+            user={user}
+            token={token}
+            onGameStart={handleGameStart}
+          />
+        )}
+      </div>
+    </>
   );
 }
 

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../socket.js';
 
 const styles = {
@@ -8,8 +7,7 @@ const styles = {
   modes: { display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' },
   modeCard: {
     background: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 32,
-    border: '1px solid rgba(255,255,255,0.1)', width: 320, cursor: 'pointer',
-    transition: 'all 0.2s',
+    border: '1px solid rgba(255,255,255,0.1)', width: 320,
   },
   modeTitle: { fontSize: 22, fontWeight: 700, marginBottom: 12 },
   modeDesc: { color: '#999', fontSize: 14, marginBottom: 20, lineHeight: 1.6 },
@@ -25,8 +23,7 @@ const styles = {
   spinner: { fontSize: 32, marginBottom: 16 },
 };
 
-export default function Lobby({ user, token }) {
-  const navigate = useNavigate();
+export default function Lobby({ user, token, onGameStart }) {
   const [boardSize, setBoardSize] = useState(19);
   const [difficulty, setDifficulty] = useState('medium');
   const [playerColor, setPlayerColor] = useState('black');
@@ -36,7 +33,7 @@ export default function Lobby({ user, token }) {
     const socket = getSocket(token);
     socket.emit('create:ai', { boardSize, difficulty, playerColor });
     socket.once('game:start', (game) => {
-      navigate(`/game/${game.id}`);
+      onGameStart(game);
     });
   };
 
@@ -46,7 +43,7 @@ export default function Lobby({ user, token }) {
     socket.emit('create:pvp', { boardSize });
     socket.once('game:start', (game) => {
       setWaiting(false);
-      navigate(`/game/${game.id}`);
+      onGameStart(game);
     });
   };
 
@@ -73,7 +70,6 @@ export default function Lobby({ user, token }) {
     <div style={styles.lobby}>
       <div style={styles.welcome}>欢迎, {user.username} 👋</div>
       <div style={styles.modes}>
-        {/* AI Mode */}
         <div style={styles.modeCard}>
           <div style={styles.modeTitle}>🤖 人机对战</div>
           <div style={styles.modeDesc}>和 AI 对弈，支持多种难度，适合练习和学习。</div>
@@ -107,7 +103,6 @@ export default function Lobby({ user, token }) {
           </button>
         </div>
 
-        {/* PvP Mode */}
         <div style={styles.modeCard}>
           <div style={styles.modeTitle}>👥 人人对战</div>
           <div style={styles.modeDesc}>在线匹配真人对手，体验真正的围棋对弈。</div>
