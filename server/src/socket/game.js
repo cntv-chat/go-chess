@@ -4,6 +4,11 @@ import { getAIMove } from '../game/ai.js';
 import { saveGame, updateELO, getRecentGames, getDB } from '../db.js';
 import { randomUUID } from 'crypto';
 
+function log(event, data = '') {
+  const ts = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+  console.log(`[${ts}] ${event}${data ? ' | ' + (typeof data === 'object' ? JSON.stringify(data) : data) : ''}`);
+}
+
 const games = new Map();
 const waitingPlayers = new Map();
 const onlineUsers = new Map(); // oderId -> { id, username, rating, sockets: Set }
@@ -29,7 +34,7 @@ export function setupGameSocket(io) {
   });
 
   io.on('connection', (socket) => {
-    console.log(`Connected: ${socket.user.username}`);
+    log('CONNECT', { socketId: socket.id, user: socket.user.username, userId: socket.user.id });
 
     // Track online user (deduplicate by userId)
     const uid = socket.user.id;
@@ -55,21 +60,22 @@ export function setupGameSocket(io) {
 
     // --- Rejoin active game after refresh ---
     socket.on('rejoin', () => {
-      // Find game where this user is a player
+      log('REJOIN attempt', { user: socket.user.username });
       for (const [gameId, game] of games) {
         if (game.status !== 'playing') continue;
         const isBlack = game.playerUsers.black.username === socket.user.username;
         const isWhite = game.playerUsers.white.username === socket.user.username;
         if (isBlack || isWhite) {
-          // Update socket id in players
           if (isBlack) game.players.black = socket.id;
           else game.players.white = socket.id;
           socket.join(gameId);
           socket.gameId = gameId;
+          log('REJOIN success', { user: socket.user.username, gameId, side: isBlack ? 'black' : 'white' });
           socket.emit('game:rejoin', sanitizeGame(game));
           return;
         }
       }
+      log('REJOIN no game found', { user: socket.user.username });
       socket.emit('game:rejoin', null);
     });
 
@@ -83,6 +89,7 @@ export function setupGameSocket(io) {
     // --- Create AI game ---
     socket.on('create:ai', ({ boardSize = 19, difficulty = 'medium', playerColor = 'black', timeLimit } = {}) => {
       const gameId = randomUUID();
+      log('CREATE:AI', { user: socket.user.username, gameId: gameId.slice(0, 8), boardSize, difficulty, playerColor });
       const totalTime = timeLimit || DEFAULT_TIME[boardSize] || 1800;
       const game = {
         id: gameId,
@@ -131,6 +138,7 @@ export function setupGameSocket(io) {
       if (waiting && waiting.id !== socket.id) {
         waitingPlayers.delete(boardSize);
         const gameId = randomUUID();
+        log('CREATE:PVP matched', { gameId: gameId.slice(0, 8), black: waiting.user.username, white: socket.user.username, boardSize });
         const totalTime = timeLimit || DEFAULT_TIME[boardSize] || 1800;
         const game = {
           id: gameId,
@@ -164,6 +172,7 @@ export function setupGameSocket(io) {
         broadcastActiveGames(io);
       } else {
         waitingPlayers.set(boardSize, socket);
+        log('CREATE:PVP waiting', { user: socket.user.username, boardSize });
         socket.emit('game:waiting', { boardSize });
       }
     });
@@ -182,10 +191,18 @@ export function setupGameSocket(io) {
       if (!game || game.status !== 'playing') return;
 
       const playerColor = game.players.black === socket.id ? BLACK : WHITE;
-      if (game.currentColor !== playerColor) return socket.emit('error', '不是你的回合');
+      if (game.currentColor !== playerColor) {
+        log('MOVE rejected (not your turn)', { user: socket.user.username, x, y });
+        return socket.emit('error', '不是你的回合');
+      }
 
       const result = playMove(game.board, x, y, playerColor, game.koPoint);
-      if (!result) return socket.emit('error', '无效落子');
+      if (!result) {
+        log('MOVE rejected (invalid)', { user: socket.user.username, x, y });
+        return socket.emit('error', '无效落子');
+      }
+
+      log('MOVE', { user: socket.user.username, gameId: game.id.slice(0, 8), x, y, color: playerColor === BLACK ? 'B' : 'W', moveNum: game.moves.length + 1 });
 
       // Save state for undo
       game.history.push({
@@ -222,6 +239,8 @@ export function setupGameSocket(io) {
       const playerColor = game.players.black === socket.id ? BLACK : WHITE;
       if (game.currentColor !== playerColor) return;
 
+      log('PASS', { user: socket.user.username, gameId: game.id.slice(0, 8), passes: game.passes + 1 });
+
       game.history.push({
         board: cloneBoard(game.board),
         koPoint: game.koPoint,
@@ -249,8 +268,9 @@ export function setupGameSocket(io) {
     socket.on('undo', () => {
       const game = games.get(socket.gameId);
       if (!game || game.status !== 'playing' || game.type !== 'ai') return;
-      // Undo 2 steps (player + AI)
       if (game.history.length < 2) return socket.emit('error', '无法悔棋');
+
+      log('UNDO', { user: socket.user.username, gameId: game.id.slice(0, 8), historyLen: game.history.length });
 
       const prev = game.history[game.history.length - 2];
       game.history = game.history.slice(0, -2);
@@ -270,6 +290,7 @@ export function setupGameSocket(io) {
       if (!game || game.status !== 'playing') return;
 
       const playerColor = game.players.black === socket.id ? 'black' : 'white';
+      log('RESIGN', { user: socket.user.username, gameId: game.id.slice(0, 8), side: playerColor });
       game.status = 'ended';
       game.result = { winner: playerColor === 'black' ? 'white' : 'black', reason: 'resign' };
       stopTimer(game.id);
@@ -282,6 +303,7 @@ export function setupGameSocket(io) {
     socket.on('spectate', ({ gameId }) => {
       const game = games.get(gameId);
       if (!game) return socket.emit('error', '对局不存在');
+      log('SPECTATE', { user: socket.user.username, gameId: gameId.slice(0, 8) });
       socket.join(gameId);
       socket.spectatingId = gameId;
       game.spectators.add(socket.id);
@@ -303,6 +325,7 @@ export function setupGameSocket(io) {
 
     // --- Disconnect ---
     socket.on('disconnect', () => {
+      log('DISCONNECT', { socketId: socket.id, user: socket.user.username });
       // Remove socket from online tracking
       const uid = socket.user.id;
       if (uid && uid !== 0 && onlineUsers.has(uid)) {
@@ -353,6 +376,7 @@ function startTimer(io, gameId) {
       game.timer[colorKey] = 0;
       game.status = 'ended';
       game.result = { winner: colorKey === 'black' ? 'white' : 'black', reason: 'timeout' };
+      log('GAME END (timeout)', { gameId: game.id.slice(0, 8), loser: colorKey });
       clearInterval(interval);
       gameTimers.delete(gameId);
       persistGame(game);
@@ -433,6 +457,7 @@ function endGame(io, game) {
     reason: 'score',
     score
   };
+  log('GAME END (score)', { gameId: game.id.slice(0, 8), winner: game.result.winner, black: score.black, white: score.white });
   stopTimer(game.id);
   persistGame(game);
   io.to(game.id).emit('game:end', sanitizeGame(game));
@@ -452,6 +477,7 @@ function persistGame(game) {
       if (winnerId && loserId) updateELO(winnerId, loserId);
     }
   } catch (e) {
+    log('PERSIST ERROR', e.message);
     console.error('Failed to persist game:', e.message);
   }
 }
