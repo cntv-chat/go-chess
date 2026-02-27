@@ -5,46 +5,48 @@ const styles = {
   layout: { display: 'flex', gap: 20, justifyContent: 'center', paddingTop: 24, flexWrap: 'wrap', maxWidth: 1100, margin: '0 auto' },
   main: { flex: '1 1 600px', display: 'flex', flexDirection: 'column', gap: 20 },
   rightBar: { width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16 },
-  welcome: { fontSize: 20, marginBottom: 8, color: '#ccc', textAlign: 'center' },
+  welcome: { fontSize: 20, marginBottom: 8, color: 'var(--text-secondary)', textAlign: 'center' },
   modes: { display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' },
   modeCard: {
-    background: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 24,
-    border: '1px solid rgba(255,255,255,0.1)', flex: '1 1 280px', maxWidth: 360,
+    background: 'var(--bg-card)', borderRadius: 16, padding: 24,
+    border: '1px solid var(--border)', flex: '1 1 280px', maxWidth: 360,
+    boxShadow: 'var(--shadow-sm)',
   },
-  modeTitle: { fontSize: 20, fontWeight: 700, marginBottom: 8 },
-  modeDesc: { color: '#999', fontSize: 13, marginBottom: 16, lineHeight: 1.5 },
+  modeTitle: { fontSize: 20, fontWeight: 700, marginBottom: 8, color: 'var(--text)' },
+  modeDesc: { color: 'var(--text-muted)', fontSize: 13, marginBottom: 16, lineHeight: 1.5 },
   options: { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 },
-  label: { fontSize: 12, color: '#aaa', marginBottom: 2 },
+  label: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 },
   select: {
-    padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.08)',
-    border: '1px solid rgba(255,255,255,0.2)', color: '#eee', fontSize: 14, width: '100%',
+    padding: '8px 12px', borderRadius: 8, background: 'var(--bg-input)',
+    border: '1px solid var(--border-input)', color: 'var(--text)', fontSize: 14, width: '100%',
   },
-  waiting: { textAlign: 'center', padding: 40, fontSize: 18, color: '#999' },
+  waiting: { textAlign: 'center', padding: 40, fontSize: 18, color: 'var(--text-muted)' },
   spinner: { fontSize: 32, marginBottom: 16 },
   infoRow: { display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' },
   panel: {
-    background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14,
-    border: '1px solid rgba(255,255,255,0.08)', flex: '1 1 240px', maxWidth: 400,
+    background: 'var(--bg-card)', borderRadius: 12, padding: 14,
+    border: '1px solid var(--border)', flex: '1 1 240px', maxWidth: 400,
+    boxShadow: 'var(--shadow-sm)',
   },
   sidePanel: {
-    background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14,
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--bg-card)', borderRadius: 12, padding: 14,
+    border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
   },
-  panelTitle: { fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#bbb' },
-  userItem: { fontSize: 12, padding: '3px 0', color: '#ccc', display: 'flex', alignItems: 'center', gap: 6 },
-  onlineDot: { width: 7, height: 7, borderRadius: '50%', background: '#4caf50', flexShrink: 0 },
-  rating: { fontSize: 11, color: '#888', marginLeft: 'auto' },
+  panelTitle: { fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--text-secondary)' },
+  userItem: { fontSize: 12, padding: '3px 0', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 },
+  onlineDot: { width: 7, height: 7, borderRadius: '50%', background: 'var(--online-dot)', flexShrink: 0 },
+  rating: { fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' },
   gameItem: {
     fontSize: 12, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-    background: 'rgba(255,255,255,0.04)', marginBottom: 6,
-    border: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.2s',
+    background: 'var(--bg-card)', marginBottom: 6,
+    border: '1px solid var(--border)', transition: 'background 0.2s',
   },
   historyItem: {
     fontSize: 11, padding: '6px 10px', borderRadius: 6,
-    background: 'rgba(255,255,255,0.03)', marginBottom: 4,
-    border: '1px solid rgba(255,255,255,0.05)',
+    background: 'var(--bg-card)', marginBottom: 4,
+    border: '1px solid var(--border)',
   },
-  noData: { fontSize: 12, color: '#666', textAlign: 'center', padding: 10 },
+  noData: { fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', padding: 10 },
 };
 
 export default function Lobby({ user, token, onGameStart, onSpectate }) {
@@ -115,11 +117,9 @@ export default function Lobby({ user, token, onGameStart, onSpectate }) {
 
   return (
     <div style={styles.layout}>
-      {/* Main content */}
       <div style={styles.main}>
-        <div style={styles.welcome}>欢迎, {user.username} 👋 {user.rating && <span style={{ fontSize: 14, color: '#888' }}>({user.rating})</span>}</div>
+        <div style={styles.welcome}>欢迎, {user.username} 👋 {user.rating && <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>({user.rating})</span>}</div>
 
-        {/* Game modes */}
         <div style={styles.modes}>
           <div style={styles.modeCard}>
             <div style={styles.modeTitle}>🤖 人机对战</div>
@@ -169,18 +169,17 @@ export default function Lobby({ user, token, onGameStart, onSpectate }) {
           </div>
         </div>
 
-        {/* Active games + history */}
         <div style={styles.infoRow}>
           <div style={styles.panel}>
             <div style={styles.panelTitle}>⚔️ 进行中 ({activeGames.length})</div>
             {activeGames.length === 0 ? <div style={styles.noData}>暂无对局</div> :
               activeGames.map((g) => (
                 <div key={g.id} style={styles.gameItem}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card)'}
                   onClick={() => spectateGame(g.id)}>
                   <div>{g.players.black.username} vs {g.players.white.username}</div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {g.boardSize}×{g.boardSize} · {g.moves}手 · 👁 {g.spectators}
                   </div>
                 </div>
@@ -193,7 +192,7 @@ export default function Lobby({ user, token, onGameStart, onSpectate }) {
               history.map((g, i) => (
                 <div key={i} style={styles.historyItem}>
                   <div>{g.black_name} vs {g.white_name}</div>
-                  <div style={{ fontSize: 10, color: '#777', marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                     {g.winner === 'black' ? '⚫胜' : '⚪胜'} · {g.reason} · {g.board_size}路
                   </div>
                 </div>
@@ -203,7 +202,6 @@ export default function Lobby({ user, token, onGameStart, onSpectate }) {
         </div>
       </div>
 
-      {/* Right sidebar - online users */}
       <div style={styles.rightBar}>
         <div style={styles.sidePanel}>
           <div style={styles.panelTitle}>🟢 在线 ({onlineUsers.length})</div>

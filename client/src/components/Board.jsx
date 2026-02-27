@@ -182,10 +182,20 @@ export default function Board({ board, boardSize, currentColor, onMove, disabled
           onTouchEnd={handleTouch}
         />
         <button onClick={() => setShowModal(true)} style={{
-          position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)',
-          color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px',
-          fontSize: 16, cursor: 'pointer', opacity: 0.7,
-        }} title="放大棋盘">🔍</button>
+          position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.55)',
+          color: '#fff', border: '2px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 10px',
+          fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+          backdropFilter: 'blur(4px)', transition: 'all 0.2s',
+        }} title="放大棋盘"
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.75)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.55)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'; }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+          </svg>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>放大</span>
+        </button>
       </div>
 
       {showModal && (

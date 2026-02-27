@@ -18,54 +18,54 @@ const styles = {
   },
   sidebar: { width: 280, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 240 },
   infoCard: {
-    background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14,
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--bg-card)', borderRadius: 12, padding: 14,
+    border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
   },
   playerRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' },
   stone: { width: 18, height: 18, borderRadius: '50%', flexShrink: 0 },
-  activePlayer: { boxShadow: '0 0 0 3px #667eea' },
-  playerName: { fontSize: 14, fontWeight: 600, flex: 1 },
-  captures: { fontSize: 12, color: '#999' },
+  activePlayer: { boxShadow: '0 0 0 3px var(--accent)' },
+  playerName: { fontSize: 14, fontWeight: 600, flex: 1, color: 'var(--text)' },
+  captures: { fontSize: 12, color: 'var(--text-muted)' },
   timerText: { fontSize: 13, fontWeight: 700, fontFamily: 'monospace', marginLeft: 6 },
-  timerLow: { color: '#f44336' },
-  timerNormal: { color: '#4fc3f7' },
+  timerLow: { color: 'var(--danger)' },
+  timerNormal: { color: 'var(--accent)' },
   status: {
     textAlign: 'center', padding: '8px 14px', borderRadius: 8,
-    background: 'rgba(102,126,234,0.15)', fontSize: 13, fontWeight: 600,
+    background: 'var(--accent-glow)', fontSize: 13, fontWeight: 600, color: 'var(--text)',
   },
   actions: { display: 'flex', flexDirection: 'column', gap: 8 },
   moveList: {
-    maxHeight: 120, overflowY: 'auto', fontSize: 11, color: '#aaa',
-    background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: 8,
+    maxHeight: 120, overflowY: 'auto', fontSize: 11, color: 'var(--text-muted)',
+    background: 'var(--bg-input)', borderRadius: 8, padding: 8,
   },
   result: {
     textAlign: 'center', padding: 18, borderRadius: 12,
-    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+    background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
   },
-  resultTitle: { fontSize: 20, fontWeight: 700, marginBottom: 6 },
-  resultDetail: { fontSize: 12, color: '#aaa', marginBottom: 14 },
-  gameInfo: { fontSize: 11, color: '#777', display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 6 },
-  spectatorBadge: { fontSize: 11, color: '#999', textAlign: 'center', padding: '2px 0' },
-  // Chat styles
+  resultTitle: { fontSize: 20, fontWeight: 700, marginBottom: 6, color: 'var(--text)' },
+  resultDetail: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 },
+  gameInfo: { fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 6 },
+  spectatorBadge: { fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '2px 0' },
   chatBox: {
-    background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 12,
-    border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column',
+    background: 'var(--bg-card)', borderRadius: 12, padding: 12,
+    border: '1px solid var(--border)', display: 'flex', flexDirection: 'column',
+    boxShadow: 'var(--shadow-sm)',
   },
-  chatTitle: { fontSize: 12, color: '#999', marginBottom: 6 },
+  chatTitle: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 },
   chatMessages: {
-    maxHeight: 150, minHeight: 80, overflowY: 'auto', fontSize: 12, color: '#ccc',
-    background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: 8, marginBottom: 8,
+    maxHeight: 150, minHeight: 80, overflowY: 'auto', fontSize: 12, color: 'var(--text-secondary)',
+    background: 'var(--bg-input)', borderRadius: 8, padding: 8, marginBottom: 8,
   },
   chatMsg: { marginBottom: 4, lineHeight: 1.4 },
-  chatUser: { color: '#667eea', fontWeight: 600 },
+  chatUser: { color: 'var(--accent)', fontWeight: 600 },
   chatInputRow: { display: 'flex', gap: 6 },
   chatInput: {
-    flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)',
-    background: 'rgba(255,255,255,0.06)', color: '#eee', fontSize: 12, outline: 'none',
+    flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-input)',
+    background: 'var(--bg-input)', color: 'var(--text)', fontSize: 12, outline: 'none',
   },
   chatSend: {
     padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-    background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff',
+    background: 'linear-gradient(135deg, var(--accent), var(--accent2))', color: '#fff',
     border: 'none', cursor: 'pointer',
   },
 };
@@ -234,7 +234,7 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
         </div>
 
         <div style={styles.status}>
-          {error ? <span style={{ color: '#f44336' }}>{error}</span> : statusText}
+          {error ? <span style={{ color: 'var(--danger)' }}>{error}</span> : statusText}
         </div>
 
         {spectatorCount > 0 && <div style={styles.spectatorBadge}>👁 {spectatorCount} 人观战</div>}
@@ -271,7 +271,7 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
         <div style={styles.chatBox}>
           <div style={styles.chatTitle}>💬 聊天</div>
           <div style={styles.chatMessages}>
-            {chatMessages.length === 0 && <div style={{ color: '#666', fontSize: 11 }}>暂无消息</div>}
+            {chatMessages.length === 0 && <div style={{ color: 'var(--text-dim)', fontSize: 11 }}>暂无消息</div>}
             {chatMessages.map((m, i) => (
               <div key={i} style={styles.chatMsg}>
                 <span style={styles.chatUser}>{m.user}</span>: {m.message}
@@ -288,7 +288,7 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
 
         {game.moves.length > 0 && (
           <div style={styles.infoCard}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 4 }}>落子记录</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>落子记录</div>
             <div style={styles.moveList}>
               {game.moves.map((m, i) => (
                 <div key={i}>{i + 1}. {m.color === BLACK ? '⚫' : '⚪'} {m.pass ? 'Pass' : `(${m.x}, ${m.y})`}</div>

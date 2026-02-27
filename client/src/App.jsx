@@ -5,11 +5,11 @@ import Game from './pages/Game.jsx';
 import { getSocket, disconnectSocket } from './socket.js';
 
 const THEMES = [
-  { key: 'dark', name: '深色', color: '#1a1a2e' },
-  { key: 'light', name: '浅色', color: '#f0f0f5' },
-  { key: 'green', name: '翠绿', color: '#1a2e1a' },
-  { key: 'warm', name: '暖棕', color: '#2e1f1a' },
-  { key: 'purple', name: '紫韵', color: '#1e1a2e' },
+  { key: 'dark', name: '深邃', color: '#667eea' },
+  { key: 'light', name: '素雅', color: '#e8e0d8' },
+  { key: 'green', name: '青竹', color: '#66bb6a' },
+  { key: 'warm', name: '暖木', color: '#ffb74d' },
+  { key: 'purple', name: '星夜', color: '#ba93ff' },
 ];
 
 function getHashRoute() {
@@ -123,7 +123,7 @@ function App() {
   };
 
   if (loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', color: '#999' }}>加载中...</div>;
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', color: 'var(--text-muted)' }}>加载中...</div>;
   }
 
   if (!user) {
@@ -148,7 +148,7 @@ function App() {
             </button>
           )}
           <span>{user.username}</span>
-          {user.rating && <span style={{ fontSize: 12, color: '#888' }}>({user.rating})</span>}
+          {user.rating && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({user.rating})</span>}
           <button className="btn-secondary" onClick={handleLogout}>退出</button>
         </div>
       </div>

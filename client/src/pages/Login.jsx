@@ -6,23 +6,23 @@ const styles = {
     minHeight: '80vh',
   },
   card: {
-    background: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 40,
-    border: '1px solid rgba(255,255,255,0.08)', width: 380,
+    background: 'var(--bg-card)', borderRadius: 16, padding: 40,
+    border: '1px solid var(--border)', width: 380, boxShadow: 'var(--shadow)',
   },
   title: {
     fontSize: 28, fontWeight: 700, textAlign: 'center', marginBottom: 8,
-    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+    background: 'linear-gradient(135deg, var(--accent), var(--accent2))',
     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
   },
-  subtitle: { textAlign: 'center', color: '#999', marginBottom: 32, fontSize: 14 },
+  subtitle: { textAlign: 'center', color: 'var(--text-muted)', marginBottom: 32, fontSize: 14 },
   form: { display: 'flex', flexDirection: 'column', gap: 16 },
   error: {
-    background: 'rgba(244,67,54,0.15)', color: '#f44336',
+    background: 'rgba(244,67,54,0.15)', color: 'var(--danger)',
     padding: '10px 16px', borderRadius: 8, fontSize: 14,
   },
-  toggle: { textAlign: 'center', marginTop: 20, fontSize: 14, color: '#999' },
+  toggle: { textAlign: 'center', marginTop: 20, fontSize: 14, color: 'var(--text-muted)' },
   toggleLink: {
-    color: '#667eea', cursor: 'pointer', fontWeight: 600,
+    color: 'var(--accent)', cursor: 'pointer', fontWeight: 600,
     background: 'none', border: 'none', fontSize: 14, padding: 0,
   },
 };
@@ -62,18 +62,8 @@ export default function Login({ onLogin }) {
         <div style={styles.subtitle}>{isRegister ? '创建账号开始对弈' : '登录继续对弈'}</div>
         <form style={styles.form} onSubmit={handleSubmit}>
           {error && <div style={styles.error}>{error}</div>}
-          <input
-            placeholder="用户名"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            autoFocus
-          />
-          <input
-            type="password"
-            placeholder="密码"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-          />
+          <input placeholder="用户名" value={username} onChange={e => setUsername(e.target.value)} autoFocus />
+          <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} />
           <button className="btn-primary" disabled={loading}>
             {loading ? '请稍候...' : isRegister ? '注册' : '登录'}
           </button>
