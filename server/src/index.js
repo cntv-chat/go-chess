@@ -25,6 +25,17 @@ app.use(express.json());
 // API routes
 app.use('/api/auth', authRouter);
 
+// Game history API
+import { getRecentGames, getUserGames } from './db.js';
+app.get('/api/games/recent', (req, res) => {
+  const limit = parseInt(req.query.limit) || 20;
+  res.json(getRecentGames(limit));
+});
+app.get('/api/games/user/:id', (req, res) => {
+  const limit = parseInt(req.query.limit) || 20;
+  res.json(getUserGames(parseInt(req.params.id), limit));
+});
+
 // Serve static files in production
 const clientDist = path.join(__dirname, '../../client/dist');
 app.use(express.static(clientDist));
