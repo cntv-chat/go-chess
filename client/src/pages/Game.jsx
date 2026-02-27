@@ -134,7 +134,7 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
       prevMovesLen.current = g.moves?.length || 0;
       prevCaptures.current = { ...(g.captures || { black: 0, white: 0 }) };
       setGame(g);
-      if (g.timer) setTimer(g.timer);
+      // Don't update timer from game:update — let game:timer handle it
     };
 
     const handleEnd = (g) => { playEndSound(); setGame(g); };
