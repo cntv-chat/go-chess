@@ -105,41 +105,68 @@ function mediumMove(board, color, koPoint) {
   return top[Math.floor(Math.random() * top.length)].move;
 }
 
-// Hard: lightweight Monte Carlo simulation
+// Hard: Monte Carlo with pre-filtering
 function hardMove(board, color, koPoint) {
   const moves = getValidMoves(board, color, koPoint);
   if (moves.length === 0) return null;
 
-  const simulations = 100;
-  const scores = new Map();
+  const size = board.length;
+  const opponent = color === BLACK ? WHITE : BLACK;
 
+  // Pre-filter: score all moves with heuristics, pick top candidates
+  const scored = [];
   for (const [x, y] of moves) {
-    const key = `${x},${y}`;
-    let wins = 0;
-
-    for (let s = 0; s < simulations; s++) {
-      const result = simulateGame(board, x, y, color, koPoint);
-      if (result === color) wins++;
+    let score = 0;
+    const result = playMove(board, x, y, color, koPoint);
+    if (!result) continue;
+    score += result.captured * 10;
+    const cx = size / 2, cy = size / 2;
+    score += Math.max(0, size - Math.abs(x - cx) - Math.abs(y - cy)) * 0.5;
+    for (const [nx, ny] of getNeighbors(x, y, size)) {
+      if (board[nx][ny] === color) score += 2;
+      if (board[nx][ny] === opponent) {
+        const group = findGroup(board, nx, ny);
+        if (group.liberties.size <= 2) score += 5;
+        if (group.liberties.size === 1) score += 15;
+      }
     }
-
-    scores.set(key, wins / simulations);
+    const selfGroup = findGroup(result.board, x, y);
+    if (selfGroup.liberties.size === 1) score -= 8;
+    if (x === 0 || x === size - 1 || y === 0 || y === size - 1) score -= 3;
+    scored.push({ move: [x, y], score });
   }
 
-  // Pick best
-  let bestMove = moves[0];
-  let bestScore = -1;
-  for (const [x, y] of moves) {
-    const s = scores.get(`${x},${y}`) || 0;
-    if (s > bestScore) {
-      bestScore = s;
-      bestMove = [x, y];
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.score - a.score);
+
+  // Only simulate top candidates
+  const maxCandidates = size >= 19 ? 10 : size >= 13 ? 15 : 20;
+  const candidates = scored.slice(0, Math.min(maxCandidates, scored.length));
+  const simulations = size >= 19 ? 30 : size >= 13 ? 50 : 80;
+  const maxSimMoves = size * size * 0.4; // limit simulation depth
+
+  const results = new Map();
+  for (const { move: [x, y] } of candidates) {
+    const key = `${x},${y}`;
+    let wins = 0;
+    for (let s = 0; s < simulations; s++) {
+      const result = simulateGame(board, x, y, color, koPoint, maxSimMoves);
+      if (result === color) wins++;
     }
+    results.set(key, wins / simulations);
+  }
+
+  let bestMove = candidates[0].move;
+  let bestScore = -1;
+  for (const { move: [x, y] } of candidates) {
+    const s = results.get(`${x},${y}`) || 0;
+    if (s > bestScore) { bestScore = s; bestMove = [x, y]; }
   }
 
   return bestMove;
 }
 
-function simulateGame(board, firstX, firstY, firstColor, koPoint) {
+function simulateGame(board, firstX, firstY, firstColor, koPoint, maxMoves) {
   let simBoard = cloneBoard(board);
   const result = playMove(simBoard, firstX, firstY, firstColor, koPoint);
   if (!result) return firstColor === BLACK ? WHITE : BLACK;
@@ -148,9 +175,9 @@ function simulateGame(board, firstX, firstY, firstColor, koPoint) {
   let currentColor = firstColor === BLACK ? WHITE : BLACK;
   let ko = result.koPoint;
   let passes = 0;
-  const maxMoves = simBoard.length * simBoard.length;
+  const limit = maxMoves || simBoard.length * simBoard.length;
 
-  for (let i = 0; i < maxMoves && passes < 2; i++) {
+  for (let i = 0; i < limit && passes < 2; i++) {
     const validMoves = getValidMoves(simBoard, currentColor, ko);
     if (validMoves.length === 0) {
       passes++;
