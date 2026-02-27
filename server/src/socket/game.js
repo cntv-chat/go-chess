@@ -53,6 +53,26 @@ export function setupGameSocket(io) {
       socket.emit('active:games', getActiveGamesList());
     });
 
+    // --- Rejoin active game after refresh ---
+    socket.on('rejoin', () => {
+      // Find game where this user is a player
+      for (const [gameId, game] of games) {
+        if (game.status !== 'playing') continue;
+        const isBlack = game.playerUsers.black.username === socket.user.username;
+        const isWhite = game.playerUsers.white.username === socket.user.username;
+        if (isBlack || isWhite) {
+          // Update socket id in players
+          if (isBlack) game.players.black = socket.id;
+          else game.players.white = socket.id;
+          socket.join(gameId);
+          socket.gameId = gameId;
+          socket.emit('game:rejoin', sanitizeGame(game));
+          return;
+        }
+      }
+      socket.emit('game:rejoin', null);
+    });
+
     // --- Game history ---
     socket.on('get:history', (data) => {
       const limit = (data && data.limit) || 20;
