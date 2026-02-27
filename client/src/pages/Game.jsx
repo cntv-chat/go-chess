@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getSocket } from '../socket.js';
 import Board from '../components/Board.jsx';
-import { playPlaceSound, playCaptureSound, playPassSound, playEndSound } from '../sounds.js';
+import { playPlaceSound, playCaptureSound, playPassSound, playEndSound, playChatSound } from '../sounds.js';
 
 const BLACK = 1, WHITE = 2;
 
@@ -141,7 +141,10 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
     const handleError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000); };
     const handleTimer = (t) => setTimer(t);
     const handleSpectators = (count) => setSpectatorCount(count);
-    const handleChat = (msg) => setChatMessages(prev => [...prev.slice(-100), msg]);
+    const handleChat = (msg) => {
+      if (msg.user !== user.username) playChatSound();
+      setChatMessages(prev => [...prev.slice(-100), msg]);
+    };
 
     socket.on('game:update', handleUpdate);
     socket.on('game:end', handleEnd);
@@ -241,7 +244,14 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
             <div style={styles.resultTitle}>{game.result.winner === 'black' ? '⚫ 黑方胜' : '⚪ 白方胜'}</div>
             <div style={styles.resultDetail}>
               {game.result.reason === 'score' && game.result.score && <>黑: {game.result.score.black} | 白: {game.result.score.white} (贴目 {game.result.score.komi})</>}
-              {game.result.reason === 'resign' && '对方认输'}
+              {game.result.reason === 'resign' && (() => {
+                const myColor = game.players.black.username === user.username ? 'black'
+                  : game.players.white.username === user.username ? 'white' : null;
+                const loser = game.result.winner === 'black' ? 'white' : 'black';
+                if (myColor === loser) return '你认输了';
+                if (myColor) return '对方认输';
+                return (loser === 'black' ? game.players.black.username : game.players.white.username) + ' 认输';
+              })()}
               {game.result.reason === 'disconnect' && '对方断线'}
               {game.result.reason === 'timeout' && '超时判负'}
             </div>
