@@ -303,11 +303,17 @@ export function setupGameSocket(io) {
     socket.on('spectate', ({ gameId }) => {
       const game = games.get(gameId);
       if (!game) return socket.emit('error', '对局不存在');
-      log('SPECTATE', { user: socket.user.username, gameId: gameId.slice(0, 8) });
+      log('SPECTATE', { user: socket.user.username, gameId: gameId.slice(0, 8), status: game.status });
       socket.join(gameId);
       socket.spectatingId = gameId;
       game.spectators.add(socket.id);
-      socket.emit('game:start', { ...sanitizeGame(game), spectating: true });
+      const gameData = { ...sanitizeGame(game), spectating: true };
+      // If game already ended, send game:end so spectator sees result
+      if (game.status === 'ended') {
+        socket.emit('game:end', gameData);
+      } else {
+        socket.emit('game:start', gameData);
+      }
       io.to(gameId).emit('game:spectators', game.spectators.size);
     });
 
@@ -321,6 +327,20 @@ export function setupGameSocket(io) {
         socket.leave(socket.spectatingId);
         socket.spectatingId = null;
       }
+    });
+
+    // --- Chat ---
+    socket.on('chat', ({ message }) => {
+      if (!message || !message.trim()) return;
+      const gameId = socket.gameId || socket.spectatingId;
+      if (!gameId) return;
+      const msg = {
+        user: socket.user.username,
+        message: message.trim().slice(0, 200),
+        time: Date.now(),
+      };
+      log('CHAT', { user: socket.user.username, gameId: gameId.slice(0, 8), msg: msg.message.slice(0, 30) });
+      io.to(gameId).emit('chat:message', msg);
     });
 
     // --- Disconnect ---

@@ -13,40 +13,60 @@ function formatTime(seconds) {
 
 const styles = {
   page: {
-    display: 'flex', gap: 24, justifyContent: 'center', paddingTop: 24,
+    display: 'flex', gap: 20, justifyContent: 'center', paddingTop: 20,
     flexWrap: 'wrap', alignItems: 'flex-start',
   },
-  sidebar: { width: 280, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 240 },
+  sidebar: { width: 280, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 240 },
   infoCard: {
-    background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 16,
+    background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14,
     border: '1px solid rgba(255,255,255,0.08)',
   },
-  playerRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' },
-  stone: { width: 20, height: 20, borderRadius: '50%', flexShrink: 0 },
+  playerRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' },
+  stone: { width: 18, height: 18, borderRadius: '50%', flexShrink: 0 },
   activePlayer: { boxShadow: '0 0 0 3px #667eea' },
-  playerName: { fontSize: 15, fontWeight: 600, flex: 1 },
-  captures: { fontSize: 13, color: '#999' },
-  timerText: { fontSize: 14, fontWeight: 700, fontFamily: 'monospace', marginLeft: 8 },
+  playerName: { fontSize: 14, fontWeight: 600, flex: 1 },
+  captures: { fontSize: 12, color: '#999' },
+  timerText: { fontSize: 13, fontWeight: 700, fontFamily: 'monospace', marginLeft: 6 },
   timerLow: { color: '#f44336' },
   timerNormal: { color: '#4fc3f7' },
   status: {
-    textAlign: 'center', padding: '10px 16px', borderRadius: 8,
-    background: 'rgba(102,126,234,0.15)', fontSize: 14, fontWeight: 600,
+    textAlign: 'center', padding: '8px 14px', borderRadius: 8,
+    background: 'rgba(102,126,234,0.15)', fontSize: 13, fontWeight: 600,
   },
   actions: { display: 'flex', flexDirection: 'column', gap: 8 },
   moveList: {
-    maxHeight: 180, overflowY: 'auto', fontSize: 12, color: '#aaa',
-    background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: 10,
+    maxHeight: 120, overflowY: 'auto', fontSize: 11, color: '#aaa',
+    background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: 8,
   },
   result: {
-    textAlign: 'center', padding: 20, borderRadius: 12,
+    textAlign: 'center', padding: 18, borderRadius: 12,
     background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
   },
-  resultTitle: { fontSize: 22, fontWeight: 700, marginBottom: 8 },
-  resultDetail: { fontSize: 13, color: '#aaa', marginBottom: 16 },
-  gameInfo: { fontSize: 12, color: '#777', display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 8 },
-  spectatorBadge: {
-    fontSize: 12, color: '#999', textAlign: 'center', padding: '4px 0',
+  resultTitle: { fontSize: 20, fontWeight: 700, marginBottom: 6 },
+  resultDetail: { fontSize: 12, color: '#aaa', marginBottom: 14 },
+  gameInfo: { fontSize: 11, color: '#777', display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 6 },
+  spectatorBadge: { fontSize: 11, color: '#999', textAlign: 'center', padding: '2px 0' },
+  // Chat styles
+  chatBox: {
+    background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 12,
+    border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column',
+  },
+  chatTitle: { fontSize: 12, color: '#999', marginBottom: 6 },
+  chatMessages: {
+    maxHeight: 150, minHeight: 80, overflowY: 'auto', fontSize: 12, color: '#ccc',
+    background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: 8, marginBottom: 8,
+  },
+  chatMsg: { marginBottom: 4, lineHeight: 1.4 },
+  chatUser: { color: '#667eea', fontWeight: 600 },
+  chatInputRow: { display: 'flex', gap: 6 },
+  chatInput: {
+    flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)',
+    background: 'rgba(255,255,255,0.06)', color: '#eee', fontSize: 12, outline: 'none',
+  },
+  chatSend: {
+    padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+    background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff',
+    border: 'none', cursor: 'pointer',
   },
 };
 
@@ -55,49 +75,45 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
   const [error, setError] = useState('');
   const [timer, setTimer] = useState(initialGame.timer || { black: 0, white: 0 });
   const [spectatorCount, setSpectatorCount] = useState(initialGame.spectators || 0);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
   const prevMovesLen = useRef(initialGame.moves?.length || 0);
   const prevCaptures = useRef({ ...(initialGame.captures || { black: 0, white: 0 }) });
   const gameIdRef = useRef(initialGame.id);
+  const chatEndRef = useRef(null);
+
+  // Auto scroll chat
+  useEffect(() => {
+    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   useEffect(() => {
     const socket = getSocket(token);
 
-    // Rejoin spectate room on reconnect
     const handleReconnect = () => {
       if (spectating && gameIdRef.current) {
         socket.emit('spectate', { gameId: gameIdRef.current });
       } else {
         socket.emit('rejoin');
         socket.once('game:rejoin', (g) => {
-          if (g) {
-            setGame(g);
-            if (g.timer) setTimer(g.timer);
-          }
+          if (g) { setGame(g); if (g.timer) setTimer(g.timer); }
         });
       }
     };
     socket.on('connect', handleReconnect);
 
-    // Handle mobile tab switch (visibility change)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         if (!socket.connected) {
           socket.connect();
         } else {
-          // Already connected, just re-sync state
           if (spectating && gameIdRef.current) {
             socket.emit('spectate', { gameId: gameIdRef.current });
-            socket.once('game:start', (g) => {
-              setGame(g);
-              if (g.timer) setTimer(g.timer);
-            });
+            socket.once('game:start', (g) => { setGame(g); if (g.timer) setTimer(g.timer); });
           } else {
             socket.emit('rejoin');
             socket.once('game:rejoin', (g) => {
-              if (g) {
-                setGame(g);
-                if (g.timer) setTimer(g.timer);
-              }
+              if (g) { setGame(g); if (g.timer) setTimer(g.timer); }
             });
           }
         }
@@ -106,39 +122,33 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
     document.addEventListener('visibilitychange', handleVisibility);
 
     const handleUpdate = (g) => {
-      // Sound effects
       if (g.moves && g.moves.length > prevMovesLen.current) {
         const lastMove = g.moves[g.moves.length - 1];
-        if (lastMove.pass) {
-          playPassSound();
-        } else {
-          const totalCapNow = (g.captures?.black || 0) + (g.captures?.white || 0);
-          const totalCapPrev = (prevCaptures.current.black || 0) + (prevCaptures.current.white || 0);
-          if (totalCapNow > totalCapPrev) playCaptureSound();
-          else playPlaceSound();
+        if (lastMove.pass) playPassSound();
+        else {
+          const capNow = (g.captures?.black || 0) + (g.captures?.white || 0);
+          const capPrev = (prevCaptures.current.black || 0) + (prevCaptures.current.white || 0);
+          if (capNow > capPrev) playCaptureSound(); else playPlaceSound();
         }
       }
       prevMovesLen.current = g.moves?.length || 0;
       prevCaptures.current = { ...(g.captures || { black: 0, white: 0 }) };
-
       setGame(g);
       if (g.timer) setTimer(g.timer);
     };
 
-    const handleEnd = (g) => {
-      playEndSound();
-      setGame(g);
-    };
-
+    const handleEnd = (g) => { playEndSound(); setGame(g); };
     const handleError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000); };
     const handleTimer = (t) => setTimer(t);
     const handleSpectators = (count) => setSpectatorCount(count);
+    const handleChat = (msg) => setChatMessages(prev => [...prev.slice(-100), msg]);
 
     socket.on('game:update', handleUpdate);
     socket.on('game:end', handleEnd);
     socket.on('error', handleError);
     socket.on('game:timer', handleTimer);
     socket.on('game:spectators', handleSpectators);
+    socket.on('chat:message', handleChat);
 
     return () => {
       socket.off('game:update', handleUpdate);
@@ -146,6 +156,7 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
       socket.off('error', handleError);
       socket.off('game:timer', handleTimer);
       socket.off('game:spectators', handleSpectators);
+      socket.off('chat:message', handleChat);
       socket.off('connect', handleReconnect);
       document.removeEventListener('visibilitychange', handleVisibility);
       if (spectating) socket.emit('leave:spectate');
@@ -154,24 +165,20 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
 
   const handleMove = useCallback((x, y) => {
     if (spectating) return;
-    const socket = getSocket(token);
-    socket.emit('move', { x, y });
+    getSocket(token).emit('move', { x, y });
   }, [token, spectating]);
 
-  const handlePass = () => {
-    if (spectating) return;
-    getSocket(token).emit('pass');
+  const handlePass = () => { if (!spectating) getSocket(token).emit('pass'); };
+  const handleResign = () => { if (!spectating && confirm('确定要认输吗？')) getSocket(token).emit('resign'); };
+  const handleUndo = () => { if (!spectating) getSocket(token).emit('undo'); };
+
+  const sendChat = () => {
+    if (!chatInput.trim()) return;
+    getSocket(token).emit('chat', { message: chatInput });
+    setChatInput('');
   };
 
-  const handleResign = () => {
-    if (spectating) return;
-    if (confirm('确定要认输吗？')) getSocket(token).emit('resign');
-  };
-
-  const handleUndo = () => {
-    if (spectating) return;
-    getSocket(token).emit('undo');
-  };
+  const handleChatKey = (e) => { if (e.key === 'Enter') sendChat(); };
 
   if (!game) return null;
 
@@ -187,9 +194,8 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
 
   const statusText = spectating
     ? '观战中'
-    : game.status === 'ended'
-      ? '对局结束'
-      : isMyTurn ? '轮到你了' : '等待对方落子...';
+    : game.status === 'ended' ? '对局结束'
+    : isMyTurn ? '轮到你了' : '等待对方落子...';
 
   const boardSizeLabel = `${game.boardSize}×${game.boardSize}`;
   const totalTimeLabel = timer.totalTime ? formatTime(timer.totalTime) : '';
@@ -197,15 +203,11 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
   return (
     <div style={styles.page}>
       <Board
-        board={game.board}
-        boardSize={game.boardSize}
-        currentColor={game.currentColor}
-        onMove={handleMove}
-        disabled={spectating || !isMyTurn || game.status !== 'playing'}
+        board={game.board} boardSize={game.boardSize} currentColor={game.currentColor}
+        onMove={handleMove} disabled={spectating || !isMyTurn || game.status !== 'playing'}
         lastMove={lastMove}
       />
       <div style={styles.sidebar}>
-        {/* Game info */}
         <div style={styles.gameInfo}>
           <span>📐 {boardSizeLabel}</span>
           {game.type === 'ai' && <span>🤖 {game.difficulty}</span>}
@@ -213,54 +215,32 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
           <span>📝 {game.moves.length}手</span>
         </div>
 
-        {/* Players + timer */}
         <div style={styles.infoCard}>
           <div style={styles.playerRow}>
-            <div style={{
-              ...styles.stone, background: '#222',
-              ...(game.currentColor === BLACK && game.status === 'playing' ? styles.activePlayer : {}),
-            }} />
+            <div style={{ ...styles.stone, background: '#222', ...(game.currentColor === BLACK && game.status === 'playing' ? styles.activePlayer : {}) }} />
             <span style={styles.playerName}>{game.players.black.username || '黑方'}</span>
             <span style={styles.captures}>提{game.captures.black}</span>
-            <span style={{
-              ...styles.timerText,
-              ...(timer.black <= 60 ? styles.timerLow : styles.timerNormal),
-            }}>{formatTime(timer.black)}</span>
+            <span style={{ ...styles.timerText, ...(timer.black <= 60 ? styles.timerLow : styles.timerNormal) }}>{formatTime(timer.black)}</span>
           </div>
           <div style={styles.playerRow}>
-            <div style={{
-              ...styles.stone, background: '#eee',
-              ...(game.currentColor === WHITE && game.status === 'playing' ? styles.activePlayer : {}),
-            }} />
+            <div style={{ ...styles.stone, background: '#eee', ...(game.currentColor === WHITE && game.status === 'playing' ? styles.activePlayer : {}) }} />
             <span style={styles.playerName}>{game.players.white.username || '白方'}</span>
             <span style={styles.captures}>提{game.captures.white}</span>
-            <span style={{
-              ...styles.timerText,
-              ...(timer.white <= 60 ? styles.timerLow : styles.timerNormal),
-            }}>{formatTime(timer.white)}</span>
+            <span style={{ ...styles.timerText, ...(timer.white <= 60 ? styles.timerLow : styles.timerNormal) }}>{formatTime(timer.white)}</span>
           </div>
         </div>
 
-        {/* Status */}
         <div style={styles.status}>
           {error ? <span style={{ color: '#f44336' }}>{error}</span> : statusText}
         </div>
 
-        {/* Spectator count */}
-        {spectatorCount > 0 && (
-          <div style={styles.spectatorBadge}>👁 {spectatorCount} 人观战</div>
-        )}
+        {spectatorCount > 0 && <div style={styles.spectatorBadge}>👁 {spectatorCount} 人观战</div>}
 
-        {/* Result */}
         {game.status === 'ended' && game.result && (
           <div style={styles.result}>
-            <div style={styles.resultTitle}>
-              {game.result.winner === 'black' ? '⚫ 黑方胜' : '⚪ 白方胜'}
-            </div>
+            <div style={styles.resultTitle}>{game.result.winner === 'black' ? '⚫ 黑方胜' : '⚪ 白方胜'}</div>
             <div style={styles.resultDetail}>
-              {game.result.reason === 'score' && game.result.score && (
-                <>黑: {game.result.score.black} | 白: {game.result.score.white} (贴目 {game.result.score.komi})</>
-              )}
+              {game.result.reason === 'score' && game.result.score && <>黑: {game.result.score.black} | 白: {game.result.score.white} (贴目 {game.result.score.komi})</>}
               {game.result.reason === 'resign' && '对方认输'}
               {game.result.reason === 'disconnect' && '对方断线'}
               {game.result.reason === 'timeout' && '超时判负'}
@@ -269,27 +249,39 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
           </div>
         )}
 
-        {/* Actions */}
         {game.status === 'playing' && !spectating && (
           <div style={styles.actions}>
-            {game.canUndo && (
-              <button className="btn-secondary" onClick={handleUndo}>↩ 悔棋</button>
-            )}
+            {game.canUndo && <button className="btn-secondary" onClick={handleUndo}>↩ 悔棋</button>}
             <button className="btn-secondary" onClick={handlePass}>跳过 (Pass)</button>
             <button className="btn-danger" onClick={handleResign}>认输</button>
           </div>
         )}
 
-        {/* Move list */}
+        {/* Chat */}
+        <div style={styles.chatBox}>
+          <div style={styles.chatTitle}>💬 聊天</div>
+          <div style={styles.chatMessages}>
+            {chatMessages.length === 0 && <div style={{ color: '#666', fontSize: 11 }}>暂无消息</div>}
+            {chatMessages.map((m, i) => (
+              <div key={i} style={styles.chatMsg}>
+                <span style={styles.chatUser}>{m.user}</span>: {m.message}
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          <div style={styles.chatInputRow}>
+            <input style={styles.chatInput} value={chatInput} onChange={e => setChatInput(e.target.value)}
+              onKeyDown={handleChatKey} placeholder="说点什么..." maxLength={200} />
+            <button style={styles.chatSend} onClick={sendChat}>发送</button>
+          </div>
+        </div>
+
         {game.moves.length > 0 && (
           <div style={styles.infoCard}>
-            <div style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>落子记录</div>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 4 }}>落子记录</div>
             <div style={styles.moveList}>
               {game.moves.map((m, i) => (
-                <div key={i}>
-                  {i + 1}. {m.color === BLACK ? '⚫' : '⚪'}{' '}
-                  {m.pass ? 'Pass' : `(${m.x}, ${m.y})`}
-                </div>
+                <div key={i}>{i + 1}. {m.color === BLACK ? '⚫' : '⚪'} {m.pass ? 'Pass' : `(${m.x}, ${m.y})`}</div>
               ))}
             </div>
           </div>
