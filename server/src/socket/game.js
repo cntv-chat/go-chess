@@ -1,6 +1,6 @@
 import { verifyToken } from '../middleware/auth.js';
 import { createBoard, playMove, calculateScore, BLACK, WHITE, EMPTY, cloneBoard } from '../game/engine.js';
-import { getAIMove } from '../game/ai.js';
+import { getAIMove, shouldResign } from '../game/ai.js';
 import { saveGame, updateELO, getRecentGames, getDB } from '../db.js';
 import { randomUUID } from 'crypto';
 
@@ -423,6 +423,18 @@ function makeAIMove(io, gameId) {
   const aiColor = game.players.black === 'ai' ? BLACK : WHITE;
   if (game.currentColor !== aiColor) return;
 
+  // Check if AI should resign (only after 20+ moves)
+  if (game.moves.length > 20 && shouldResign(game.board, aiColor)) {
+    log('AI RESIGN', { gameId: game.id.slice(0, 8), moves: game.moves.length });
+    game.status = 'ended';
+    game.result = { winner: aiColor === BLACK ? 'white' : 'black', reason: 'resign' };
+    stopTimer(game.id);
+    persistGame(game);
+    io.to(game.id).emit('game:end', sanitizeGame(game));
+    broadcastActiveGames(io);
+    return;
+  }
+
   // Save state for undo
   game.history.push({
     board: cloneBoard(game.board),
@@ -433,7 +445,7 @@ function makeAIMove(io, gameId) {
     moves: [...game.moves],
   });
 
-  const move = getAIMove(game.board, aiColor, game.koPoint, game.difficulty);
+  const move = getAIMove(game.board, aiColor, game.koPoint, game.difficulty, game.moves.length);
 
   if (!move) {
     game.passes++;

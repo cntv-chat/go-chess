@@ -46,6 +46,59 @@ function findGroup(board, x, y) {
   return { stones, liberties };
 }
 
+// Influence map: flood-fill from each stone, decaying with distance
+function buildInfluenceMap(board) {
+  const size = board.length;
+  const inf = Array.from({ length: size }, () => new Float32Array(size));
+  const decay = 0.5;
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size; y++) {
+      if (board[x][y] === EMPTY) continue;
+      const sign = board[x][y] === BLACK ? 1 : -1;
+      // BFS with decay
+      const visited = new Set();
+      const queue = [[x, y, 6]]; // strength 6
+      while (queue.length) {
+        const [cx, cy, str] = queue.shift();
+        const key = cx * size + cy;
+        if (visited.has(key) || str <= 0) continue;
+        visited.add(key);
+        inf[cx][cy] += sign * str;
+        for (const [nx, ny] of getNeighbors(cx, cy, size)) {
+          // Stones block influence propagation for the other side
+          if (board[nx][ny] !== EMPTY && board[nx][ny] !== board[x][y]) continue;
+          if (!visited.has(nx * size + ny)) queue.push([nx, ny, str * decay]);
+        }
+      }
+    }
+  }
+  return inf;
+}
+
+// Estimate territory from influence map
+function estimateTerritory(board, inf) {
+  const size = board.length;
+  let blackTerritory = 0, whiteTerritory = 0;
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size; y++) {
+      if (board[x][y] === BLACK) blackTerritory++;
+      else if (board[x][y] === WHITE) whiteTerritory++;
+      else if (inf[x][y] > 1.5) blackTerritory++;
+      else if (inf[x][y] < -1.5) whiteTerritory++;
+    }
+  }
+  return { black: blackTerritory, white: whiteTerritory + 6.5 }; // komi
+}
+
+// Check if AI should resign
+export function shouldResign(board, aiColor) {
+  const inf = buildInfluenceMap(board);
+  const territory = estimateTerritory(board, inf);
+  const myScore = aiColor === BLACK ? territory.black : territory.white;
+  const oppScore = aiColor === BLACK ? territory.white : territory.black;
+  return oppScore - myScore > 30; // resign if behind by 30+
+}
+
 // Easy: random valid move
 function easyMove(board, color, koPoint) {
   const moves = getValidMoves(board, color, koPoint);
@@ -53,8 +106,36 @@ function easyMove(board, color, koPoint) {
   return moves[Math.floor(Math.random() * moves.length)];
 }
 
-// Shared scoring function
-function scoreMove(board, x, y, color, koPoint, level) {
+// Opening: prefer star points and 3-4 points in early game
+function getOpeningMove(board, color, size, moveCount) {
+  if (moveCount > 8) return null; // only first 8 moves
+  const candidates = [];
+  if (size === 19) {
+    // Star points + 3-4 / 4-3 points
+    const pts = [
+      [3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15],
+      [2,3],[3,2],[2,15],[3,16],[15,2],[16,3],[15,16],[16,15],
+    ];
+    for (const [x, y] of pts) {
+      if (board[x][y] === EMPTY) candidates.push([x, y]);
+    }
+  } else if (size === 13) {
+    const pts = [[3,3],[3,6],[3,9],[6,3],[6,6],[6,9],[9,3],[9,6],[9,9]];
+    for (const [x, y] of pts) {
+      if (board[x][y] === EMPTY) candidates.push([x, y]);
+    }
+  } else {
+    const pts = [[2,2],[2,4],[2,6],[4,2],[4,4],[4,6],[6,2],[6,4],[6,6]];
+    for (const [x, y] of pts) {
+      if (board[x][y] === EMPTY) candidates.push([x, y]);
+    }
+  }
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+// Score a move with heuristics
+function scoreMove(board, x, y, color, koPoint, inf, level) {
   const size = board.length;
   const opponent = color === BLACK ? WHITE : BLACK;
   const result = playMove(board, x, y, color, koPoint);
@@ -62,98 +143,104 @@ function scoreMove(board, x, y, color, koPoint, level) {
 
   let score = 0;
 
-  // Captures (high value)
-  score += result.captured * 12;
+  // === Captures ===
+  score += result.captured * 15;
 
-  // Center preference
-  const cx = (size - 1) / 2, cy = (size - 1) / 2;
-  const dist = Math.abs(x - cx) + Math.abs(y - cy);
-  score += Math.max(0, size - dist) * 0.3;
+  // === Influence-based: prefer moves in contested or opponent territory ===
+  const mySign = color === BLACK ? 1 : -1;
+  const infVal = inf[x][y] * mySign; // positive = my territory, negative = opponent's
+  if (infVal < -0.5) score += 8;     // invade opponent area
+  else if (infVal < 1) score += 4;   // contested area
+  else if (infVal > 4) score -= 3;   // already my territory, low value
 
-  // Neighbor analysis
-  let friendlyNeighbors = 0, enemyNeighbors = 0, emptyNeighbors = 0;
+  // === Neighbor analysis ===
+  let friendly = 0, enemy = 0, empty = 0;
   for (const [nx, ny] of getNeighbors(x, y, size)) {
-    if (board[nx][ny] === color) friendlyNeighbors++;
-    else if (board[nx][ny] === opponent) enemyNeighbors++;
-    else emptyNeighbors++;
+    if (board[nx][ny] === color) friendly++;
+    else if (board[nx][ny] === opponent) enemy++;
+    else empty++;
   }
 
-  // Extend own groups
-  score += friendlyNeighbors * 1.5;
-
-  // Threaten enemy groups
+  // === Threaten enemy groups ===
   for (const [nx, ny] of getNeighbors(x, y, size)) {
     if (board[nx][ny] === opponent) {
       const group = findGroup(board, nx, ny);
-      if (group.liberties.size === 1) score += 20; // atari!
-      else if (group.liberties.size === 2) score += 6;
-      else if (group.liberties.size === 3) score += 2;
+      const lib = group.liberties.size;
+      if (lib === 1) score += 25;      // capture!
+      else if (lib === 2) score += 8;  // atari threat
+      else if (lib === 3) score += 3;
     }
   }
 
-  // Self-atari penalty
-  const selfGroup = findGroup(result.board, x, y);
-  if (selfGroup.liberties.size === 1) score -= 10;
-  if (selfGroup.liberties.size === 2 && selfGroup.stones.length === 1) score -= 3;
-
-  // Edge penalty (early game)
-  if (x === 0 || x === size - 1 || y === 0 || y === size - 1) score -= 4;
-  if (x === 1 || x === size - 2 || y === 1 || y === size - 2) score -= 1;
-
-  // Star points bonus
-  const sp = size === 19 ? [3, 9, 15] : size === 13 ? [3, 6, 9] : [2, 4, 6];
-  if (sp.includes(x) && sp.includes(y)) score += 3;
-
-  // === Hard-only enhancements ===
-  if (level === 'hard') {
-    // Save own groups in atari
-    for (const [nx, ny] of getNeighbors(x, y, size)) {
-      if (board[nx][ny] === color) {
-        const group = findGroup(board, nx, ny);
-        if (group.liberties.size === 1) {
-          const savedGroup = findGroup(result.board, nx, ny);
-          if (savedGroup.liberties.size > 1) score += 15; // escaped atari
-        }
+  // === Save own groups in atari ===
+  for (const [nx, ny] of getNeighbors(x, y, size)) {
+    if (board[nx][ny] === color) {
+      const group = findGroup(board, nx, ny);
+      if (group.liberties.size === 1) {
+        const saved = findGroup(result.board, nx, ny);
+        if (saved.liberties.size > 1) score += 20;
       }
     }
+  }
 
+  // === Self-atari penalty ===
+  const selfGroup = findGroup(result.board, x, y);
+  if (selfGroup.liberties.size === 1 && result.captured === 0) {
+    score -= 15;
+    if (selfGroup.stones.length > 1) score -= selfGroup.stones.length * 5; // worse for bigger groups
+  }
+
+  // === Edge penalty ===
+  const edgeDist = Math.min(x, y, size - 1 - x, size - 1 - y);
+  if (edgeDist === 0) score -= 5;
+  else if (edgeDist === 1) score -= 2;
+
+  // === Extend own groups (connectivity) ===
+  score += friendly * 1.5;
+
+  // === Star points bonus (opening) ===
+  const sp = size === 19 ? [3, 9, 15] : size === 13 ? [3, 6, 9] : [2, 4, 6];
+  if (sp.includes(x) && sp.includes(y)) score += 2;
+
+  // === HARD-only enhancements ===
+  if (level === 'hard') {
     // Diagonal connections (good shape)
     for (const [dx, dy] of getDiagonals(x, y, size)) {
-      if (board[dx][dy] === color) score += 1;
+      if (board[dx][dy] === color) score += 1.5;
     }
 
-    // Cut opponent connections
+    // Cut opponent diagonal connections
     let oppDiag = 0;
     for (const [dx, dy] of getDiagonals(x, y, size)) {
       if (board[dx][dy] === opponent) oppDiag++;
     }
-    if (oppDiag >= 2 && enemyNeighbors === 0) score += 4; // cutting point
+    if (oppDiag >= 2 && enemy === 0) score += 6;
 
-    // Influence: count stones in 3-radius
-    let myInfluence = 0, oppInfluence = 0;
-    for (let dx = -3; dx <= 3; dx++) {
-      for (let dy = -3; dy <= 3; dy++) {
+    // Territory expansion: prefer moves that increase own territory
+    const infAfter = buildInfluenceMap(result.board);
+    const terBefore = estimateTerritory(board, inf);
+    const terAfter = estimateTerritory(result.board, infAfter);
+    const myBefore = color === BLACK ? terBefore.black : terBefore.white;
+    const myAfter = color === BLACK ? terAfter.black : terAfter.white;
+    score += (myAfter - myBefore) * 2;
+
+    // Thickness: prefer groups with many liberties
+    if (selfGroup.liberties.size >= 4) score += 3;
+    if (selfGroup.stones.length >= 3 && selfGroup.liberties.size >= 5) score += 4;
+
+    // Don't fill own eyes
+    if (friendly >= 3 && empty === 0 && enemy === 0) score -= 20;
+
+    // Big moves: prefer moves far from existing stones in mid-game
+    let nearbyStones = 0;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
         const nx = x + dx, ny = y + dy;
-        if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
-        if (Math.abs(dx) + Math.abs(dy) > 3) continue;
-        if (board[nx][ny] === color) myInfluence++;
-        else if (board[nx][ny] === opponent) oppInfluence++;
+        if (nx >= 0 && nx < size && ny >= 0 && ny < size && board[nx][ny] !== EMPTY)
+          nearbyStones++;
       }
     }
-    // Prefer moves in contested areas
-    if (oppInfluence > 0 && myInfluence > 0) score += 3;
-    // Expand into empty areas
-    if (oppInfluence === 0 && myInfluence === 0) score += 1;
-
-    // Eye-making: if surrounded by own stones, less valuable (already alive)
-    if (friendlyNeighbors >= 3) score -= 2;
-
-    // Ladder breaker: if capturing would create a ladder, bonus
-    if (result.captured > 0) score += 3;
-
-    // Thickness: prefer moves that create groups with 3+ liberties
-    if (selfGroup.liberties.size >= 3) score += 2;
-    if (selfGroup.stones.length >= 3 && selfGroup.liberties.size >= 4) score += 3;
+    if (nearbyStones === 0 && edgeDist >= 3) score += 3; // big empty area, worth exploring
   }
 
   return { move: [x, y], score };
@@ -163,41 +250,42 @@ function scoreMove(board, x, y, color, koPoint, level) {
 function mediumMove(board, color, koPoint) {
   const moves = getValidMoves(board, color, koPoint);
   if (moves.length === 0) return null;
-
+  const inf = buildInfluenceMap(board);
   const scored = [];
   for (const [x, y] of moves) {
-    const s = scoreMove(board, x, y, color, koPoint, 'medium');
+    const s = scoreMove(board, x, y, color, koPoint, inf, 'medium');
     if (s) scored.push(s);
   }
-
   if (scored.length === 0) return null;
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, Math.min(3, scored.length));
   return top[Math.floor(Math.random() * top.length)].move;
 }
 
-// Hard: enhanced heuristic (no Monte Carlo, instant response)
-function hardMove(board, color, koPoint) {
+// Hard: enhanced heuristic with opening book + territory awareness
+function hardMove(board, color, koPoint, moveCount) {
+  // Opening book
+  const opening = getOpeningMove(board, color, board.length, moveCount);
+  if (opening) return opening;
+
   const moves = getValidMoves(board, color, koPoint);
   if (moves.length === 0) return null;
-
+  const inf = buildInfluenceMap(board);
   const scored = [];
   for (const [x, y] of moves) {
-    const s = scoreMove(board, x, y, color, koPoint, 'hard');
+    const s = scoreMove(board, x, y, color, koPoint, inf, 'hard');
     if (s) scored.push(s);
   }
-
   if (scored.length === 0) return null;
   scored.sort((a, b) => b.score - a.score);
-  // Less randomness than medium — pick from top 2
-  const top = scored.slice(0, Math.min(2, scored.length));
-  return top[Math.floor(Math.random() * top.length)].move;
+  // Pick best move (minimal randomness)
+  return scored[0].move;
 }
 
-export function getAIMove(board, color, koPoint, difficulty = AI_MEDIUM) {
+export function getAIMove(board, color, koPoint, difficulty = AI_MEDIUM, moveCount = 0) {
   switch (difficulty) {
     case AI_EASY: return easyMove(board, color, koPoint);
-    case AI_HARD: return hardMove(board, color, koPoint);
+    case AI_HARD: return hardMove(board, color, koPoint, moveCount);
     case AI_MEDIUM:
     default: return mediumMove(board, color, koPoint);
   }
