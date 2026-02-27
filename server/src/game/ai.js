@@ -1,10 +1,9 @@
 // Go AI - multiple difficulty levels
 import { EMPTY, BLACK, WHITE, cloneBoard, playMove, getValidMoves, calculateScore, createBoard } from './engine.js';
 
-// Difficulty levels
-export const AI_EASY = 'easy';       // Random valid moves
-export const AI_MEDIUM = 'medium';   // Greedy - captures + basic strategy
-export const AI_HARD = 'hard';       // Monte Carlo Tree Search (light)
+export const AI_EASY = 'easy';
+export const AI_MEDIUM = 'medium';
+export const AI_HARD = 'hard';
 
 function getNeighbors(x, y, size) {
   const n = [];
@@ -13,6 +12,15 @@ function getNeighbors(x, y, size) {
   if (y > 0) n.push([x, y - 1]);
   if (y < size - 1) n.push([x, y + 1]);
   return n;
+}
+
+function getDiagonals(x, y, size) {
+  const d = [];
+  if (x > 0 && y > 0) d.push([x - 1, y - 1]);
+  if (x > 0 && y < size - 1) d.push([x - 1, y + 1]);
+  if (x < size - 1 && y > 0) d.push([x + 1, y - 1]);
+  if (x < size - 1 && y < size - 1) d.push([x + 1, y + 1]);
+  return d;
 }
 
 function findGroup(board, x, y) {
@@ -41,162 +49,149 @@ function findGroup(board, x, y) {
 // Easy: random valid move
 function easyMove(board, color, koPoint) {
   const moves = getValidMoves(board, color, koPoint);
-  if (moves.length === 0) return null; // pass
+  if (moves.length === 0) return null;
   return moves[Math.floor(Math.random() * moves.length)];
 }
 
-// Medium: score each move with heuristics
+// Shared scoring function
+function scoreMove(board, x, y, color, koPoint, level) {
+  const size = board.length;
+  const opponent = color === BLACK ? WHITE : BLACK;
+  const result = playMove(board, x, y, color, koPoint);
+  if (!result) return null;
+
+  let score = 0;
+
+  // Captures (high value)
+  score += result.captured * 12;
+
+  // Center preference
+  const cx = (size - 1) / 2, cy = (size - 1) / 2;
+  const dist = Math.abs(x - cx) + Math.abs(y - cy);
+  score += Math.max(0, size - dist) * 0.3;
+
+  // Neighbor analysis
+  let friendlyNeighbors = 0, enemyNeighbors = 0, emptyNeighbors = 0;
+  for (const [nx, ny] of getNeighbors(x, y, size)) {
+    if (board[nx][ny] === color) friendlyNeighbors++;
+    else if (board[nx][ny] === opponent) enemyNeighbors++;
+    else emptyNeighbors++;
+  }
+
+  // Extend own groups
+  score += friendlyNeighbors * 1.5;
+
+  // Threaten enemy groups
+  for (const [nx, ny] of getNeighbors(x, y, size)) {
+    if (board[nx][ny] === opponent) {
+      const group = findGroup(board, nx, ny);
+      if (group.liberties.size === 1) score += 20; // atari!
+      else if (group.liberties.size === 2) score += 6;
+      else if (group.liberties.size === 3) score += 2;
+    }
+  }
+
+  // Self-atari penalty
+  const selfGroup = findGroup(result.board, x, y);
+  if (selfGroup.liberties.size === 1) score -= 10;
+  if (selfGroup.liberties.size === 2 && selfGroup.stones.length === 1) score -= 3;
+
+  // Edge penalty (early game)
+  if (x === 0 || x === size - 1 || y === 0 || y === size - 1) score -= 4;
+  if (x === 1 || x === size - 2 || y === 1 || y === size - 2) score -= 1;
+
+  // Star points bonus
+  const sp = size === 19 ? [3, 9, 15] : size === 13 ? [3, 6, 9] : [2, 4, 6];
+  if (sp.includes(x) && sp.includes(y)) score += 3;
+
+  // === Hard-only enhancements ===
+  if (level === 'hard') {
+    // Save own groups in atari
+    for (const [nx, ny] of getNeighbors(x, y, size)) {
+      if (board[nx][ny] === color) {
+        const group = findGroup(board, nx, ny);
+        if (group.liberties.size === 1) {
+          const savedGroup = findGroup(result.board, nx, ny);
+          if (savedGroup.liberties.size > 1) score += 15; // escaped atari
+        }
+      }
+    }
+
+    // Diagonal connections (good shape)
+    for (const [dx, dy] of getDiagonals(x, y, size)) {
+      if (board[dx][dy] === color) score += 1;
+    }
+
+    // Cut opponent connections
+    let oppDiag = 0;
+    for (const [dx, dy] of getDiagonals(x, y, size)) {
+      if (board[dx][dy] === opponent) oppDiag++;
+    }
+    if (oppDiag >= 2 && enemyNeighbors === 0) score += 4; // cutting point
+
+    // Influence: count stones in 3-radius
+    let myInfluence = 0, oppInfluence = 0;
+    for (let dx = -3; dx <= 3; dx++) {
+      for (let dy = -3; dy <= 3; dy++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
+        if (Math.abs(dx) + Math.abs(dy) > 3) continue;
+        if (board[nx][ny] === color) myInfluence++;
+        else if (board[nx][ny] === opponent) oppInfluence++;
+      }
+    }
+    // Prefer moves in contested areas
+    if (oppInfluence > 0 && myInfluence > 0) score += 3;
+    // Expand into empty areas
+    if (oppInfluence === 0 && myInfluence === 0) score += 1;
+
+    // Eye-making: if surrounded by own stones, less valuable (already alive)
+    if (friendlyNeighbors >= 3) score -= 2;
+
+    // Ladder breaker: if capturing would create a ladder, bonus
+    if (result.captured > 0) score += 3;
+
+    // Thickness: prefer moves that create groups with 3+ liberties
+    if (selfGroup.liberties.size >= 3) score += 2;
+    if (selfGroup.stones.length >= 3 && selfGroup.liberties.size >= 4) score += 3;
+  }
+
+  return { move: [x, y], score };
+}
+
+// Medium: heuristic scoring
 function mediumMove(board, color, koPoint) {
   const moves = getValidMoves(board, color, koPoint);
   if (moves.length === 0) return null;
 
-  const size = board.length;
-  const opponent = color === BLACK ? WHITE : BLACK;
   const scored = [];
-
   for (const [x, y] of moves) {
-    let score = 0;
-    const result = playMove(board, x, y, color, koPoint);
-    if (!result) continue;
-
-    // Reward captures
-    score += result.captured * 10;
-
-    // Reward moves near center
-    const cx = size / 2, cy = size / 2;
-    const dist = Math.abs(x - cx) + Math.abs(y - cy);
-    score += Math.max(0, size - dist) * 0.5;
-
-    // Reward extending own groups
-    for (const [nx, ny] of getNeighbors(x, y, size)) {
-      if (board[nx][ny] === color) score += 2;
-    }
-
-    // Reward threatening opponent groups with few liberties
-    for (const [nx, ny] of getNeighbors(x, y, size)) {
-      if (board[nx][ny] === opponent) {
-        const group = findGroup(board, nx, ny);
-        if (group.liberties.size <= 2) score += 5;
-        if (group.liberties.size === 1) score += 15;
-      }
-    }
-
-    // Penalize self-atari
-    const selfGroup = findGroup(result.board, x, y);
-    if (selfGroup.liberties.size === 1) score -= 8;
-
-    // Avoid edges early (first 30 moves approximation)
-    if (x === 0 || x === size - 1 || y === 0 || y === size - 1) score -= 3;
-
-    // Star points bonus for opening
-    const starPoints = size === 19 ? [3, 9, 15] : size === 13 ? [3, 6, 9] : [2, 4, 6];
-    if (starPoints.includes(x) && starPoints.includes(y) && board[x][y] === EMPTY) {
-      score += 4;
-    }
-
-    scored.push({ move: [x, y], score });
+    const s = scoreMove(board, x, y, color, koPoint, 'medium');
+    if (s) scored.push(s);
   }
 
   if (scored.length === 0) return null;
   scored.sort((a, b) => b.score - a.score);
-
-  // Add some randomness - pick from top 3
   const top = scored.slice(0, Math.min(3, scored.length));
   return top[Math.floor(Math.random() * top.length)].move;
 }
 
-// Hard: Monte Carlo with pre-filtering
+// Hard: enhanced heuristic (no Monte Carlo, instant response)
 function hardMove(board, color, koPoint) {
   const moves = getValidMoves(board, color, koPoint);
   if (moves.length === 0) return null;
 
-  const size = board.length;
-  const opponent = color === BLACK ? WHITE : BLACK;
-
-  // Pre-filter: score all moves with heuristics, pick top candidates
   const scored = [];
   for (const [x, y] of moves) {
-    let score = 0;
-    const result = playMove(board, x, y, color, koPoint);
-    if (!result) continue;
-    score += result.captured * 10;
-    const cx = size / 2, cy = size / 2;
-    score += Math.max(0, size - Math.abs(x - cx) - Math.abs(y - cy)) * 0.5;
-    for (const [nx, ny] of getNeighbors(x, y, size)) {
-      if (board[nx][ny] === color) score += 2;
-      if (board[nx][ny] === opponent) {
-        const group = findGroup(board, nx, ny);
-        if (group.liberties.size <= 2) score += 5;
-        if (group.liberties.size === 1) score += 15;
-      }
-    }
-    const selfGroup = findGroup(result.board, x, y);
-    if (selfGroup.liberties.size === 1) score -= 8;
-    if (x === 0 || x === size - 1 || y === 0 || y === size - 1) score -= 3;
-    scored.push({ move: [x, y], score });
+    const s = scoreMove(board, x, y, color, koPoint, 'hard');
+    if (s) scored.push(s);
   }
 
   if (scored.length === 0) return null;
   scored.sort((a, b) => b.score - a.score);
-
-  // Only simulate top candidates
-  const maxCandidates = size >= 19 ? 10 : size >= 13 ? 15 : 20;
-  const candidates = scored.slice(0, Math.min(maxCandidates, scored.length));
-  const simulations = size >= 19 ? 30 : size >= 13 ? 50 : 80;
-  const maxSimMoves = size * size * 0.4; // limit simulation depth
-
-  const results = new Map();
-  for (const { move: [x, y] } of candidates) {
-    const key = `${x},${y}`;
-    let wins = 0;
-    for (let s = 0; s < simulations; s++) {
-      const result = simulateGame(board, x, y, color, koPoint, maxSimMoves);
-      if (result === color) wins++;
-    }
-    results.set(key, wins / simulations);
-  }
-
-  let bestMove = candidates[0].move;
-  let bestScore = -1;
-  for (const { move: [x, y] } of candidates) {
-    const s = results.get(`${x},${y}`) || 0;
-    if (s > bestScore) { bestScore = s; bestMove = [x, y]; }
-  }
-
-  return bestMove;
-}
-
-function simulateGame(board, firstX, firstY, firstColor, koPoint, maxMoves) {
-  let simBoard = cloneBoard(board);
-  const result = playMove(simBoard, firstX, firstY, firstColor, koPoint);
-  if (!result) return firstColor === BLACK ? WHITE : BLACK;
-
-  simBoard = result.board;
-  let currentColor = firstColor === BLACK ? WHITE : BLACK;
-  let ko = result.koPoint;
-  let passes = 0;
-  const limit = maxMoves || simBoard.length * simBoard.length;
-
-  for (let i = 0; i < limit && passes < 2; i++) {
-    const validMoves = getValidMoves(simBoard, currentColor, ko);
-    if (validMoves.length === 0) {
-      passes++;
-      currentColor = currentColor === BLACK ? WHITE : BLACK;
-      continue;
-    }
-
-    passes = 0;
-    const [mx, my] = validMoves[Math.floor(Math.random() * validMoves.length)];
-    const moveResult = playMove(simBoard, mx, my, currentColor, ko);
-    if (moveResult) {
-      simBoard = moveResult.board;
-      ko = moveResult.koPoint;
-    }
-    currentColor = currentColor === BLACK ? WHITE : BLACK;
-  }
-
-  const score = calculateScore(simBoard);
-  return score.black > score.white ? BLACK : WHITE;
+  // Less randomness than medium — pick from top 2
+  const top = scored.slice(0, Math.min(2, scored.length));
+  return top[Math.floor(Math.random() * top.length)].move;
 }
 
 export function getAIMove(board, color, koPoint, difficulty = AI_MEDIUM) {
