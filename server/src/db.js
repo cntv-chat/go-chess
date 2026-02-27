@@ -27,6 +27,17 @@ export function initDB() {
       losses INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+  `);
+
+  // Recreate games table with correct schema
+  // Check if games table has ended_at column
+  const tableInfo = d.prepare("PRAGMA table_info(games)").all();
+  const hasEndedAt = tableInfo.some(col => col.name === 'ended_at');
+  if (!hasEndedAt) {
+    d.exec('DROP TABLE IF EXISTS games');
+  }
+
+  d.exec(`
     CREATE TABLE IF NOT EXISTS games (
       id TEXT PRIMARY KEY,
       black_id INTEGER,

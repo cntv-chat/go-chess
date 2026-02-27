@@ -50,7 +50,7 @@ function App() {
 
   const handleGameStart = (g) => { setGame(g); setSpectating(false); };
   const handleSpectate = (g) => { setGame(g); setSpectating(true); };
-  const handleGameUpdate = (g) => setGame(g);
+  const handleGameUpdate = () => {}; // Game manages its own state now
   const handleBackToLobby = () => { setGame(null); setSpectating(false); };
 
   if (loading) {

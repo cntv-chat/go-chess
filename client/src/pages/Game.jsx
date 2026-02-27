@@ -57,14 +57,15 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
   const [spectatorCount, setSpectatorCount] = useState(initialGame.spectators || 0);
   const prevMovesLen = useRef(initialGame.moves?.length || 0);
   const prevCaptures = useRef({ ...(initialGame.captures || { black: 0, white: 0 }) });
+  const gameIdRef = useRef(initialGame.id);
 
   useEffect(() => {
     const socket = getSocket(token);
 
     // Rejoin spectate room on reconnect
     const handleReconnect = () => {
-      if (spectating && initialGame?.id) {
-        socket.emit('spectate', { gameId: initialGame.id });
+      if (spectating && gameIdRef.current) {
+        socket.emit('spectate', { gameId: gameIdRef.current });
       }
     };
     socket.on('connect', handleReconnect);
@@ -87,13 +88,11 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
 
       setGame(g);
       if (g.timer) setTimer(g.timer);
-      onGameUpdate(g);
     };
 
     const handleEnd = (g) => {
       playEndSound();
       setGame(g);
-      onGameUpdate(g);
     };
 
     const handleError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000); };
@@ -115,7 +114,7 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
       socket.off('connect', handleReconnect);
       if (spectating) socket.emit('leave:spectate');
     };
-  }, [token, onGameUpdate, spectating, initialGame?.id]);
+  }, [token, spectating]);
 
   const handleMove = useCallback((x, y) => {
     if (spectating) return;
