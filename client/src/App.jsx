@@ -4,6 +4,14 @@ import Lobby from './pages/Lobby.jsx';
 import Game from './pages/Game.jsx';
 import { getSocket, disconnectSocket } from './socket.js';
 
+const THEMES = [
+  { key: 'dark', name: '深色', color: '#1a1a2e' },
+  { key: 'light', name: '浅色', color: '#f0f0f5' },
+  { key: 'green', name: '翠绿', color: '#1a2e1a' },
+  { key: 'warm', name: '暖棕', color: '#2e1f1a' },
+  { key: 'purple', name: '紫韵', color: '#1e1a2e' },
+];
+
 function getHashRoute() {
   const hash = window.location.hash.slice(1); // remove #
   if (hash.startsWith('/game/')) return { mode: 'play', gameId: hash.slice(6) };
@@ -17,6 +25,12 @@ function App() {
   const [game, setGame] = useState(null);
   const [spectating, setSpectating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem('go-theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme === 'dark' ? '' : theme);
+    localStorage.setItem('go-theme', theme);
+  }, [theme]);
 
   // Restore from URL hash on load
   useEffect(() => {
@@ -121,6 +135,13 @@ function App() {
       <div className="header">
         <h1>⚫ 围棋对战 ⚪</h1>
         <div className="header-user">
+          <div className="theme-switcher">
+            {THEMES.map(t => (
+              <div key={t.key} className={`theme-dot${theme === t.key ? ' active' : ''}`}
+                style={{ background: t.color }} title={t.name}
+                onClick={() => setTheme(t.key)} />
+            ))}
+          </div>
           {game && (
             <button className="btn-secondary" onClick={handleBackToLobby} style={{ marginRight: 8 }}>
               {spectating ? '退出观战' : '返回大厅'}
