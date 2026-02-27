@@ -1,8 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Login from './pages/Login.jsx';
 import Lobby from './pages/Lobby.jsx';
 import Game from './pages/Game.jsx';
 import { getSocket, disconnectSocket } from './socket.js';
+
+function getHashRoute() {
+  const hash = window.location.hash.slice(1); // remove #
+  if (hash.startsWith('/game/')) return { mode: 'play', gameId: hash.slice(6) };
+  if (hash.startsWith('/spectate/')) return { mode: 'spectate', gameId: hash.slice(10) };
+  return { mode: 'lobby', gameId: null };
+}
 
 function App() {
   const [user, setUser] = useState(null);
@@ -11,26 +18,58 @@ function App() {
   const [spectating, setSpectating] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Restore from URL hash on load
   useEffect(() => {
-    if (token) {
-      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(data => {
-          setUser(data.user);
-          // Try rejoin active game
-          const socket = getSocket(token);
-          socket.emit('rejoin');
-          socket.once('game:rejoin', (g) => {
-            if (g) { setGame(g); setSpectating(false); }
+    if (!token) { setLoading(false); return; }
+
+    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        setUser(data.user);
+        const route = getHashRoute();
+        const socket = getSocket(token);
+
+        if (route.mode === 'spectate' && route.gameId) {
+          // Rejoin as spectator
+          socket.emit('spectate', { gameId: route.gameId });
+          socket.once('game:start', (g) => {
+            setGame(g);
+            setSpectating(true);
             setLoading(false);
           });
-          // Timeout fallback
-          setTimeout(() => setLoading(false), 2000);
-        })
-        .catch(() => { setToken(null); localStorage.removeItem('token'); setLoading(false); });
-    } else {
-      setLoading(false);
-    }
+          socket.once('error', () => {
+            window.location.hash = '';
+            setLoading(false);
+          });
+          setTimeout(() => setLoading(false), 3000);
+        } else if (route.mode === 'play' && route.gameId) {
+          // Try rejoin active game
+          socket.emit('rejoin');
+          socket.once('game:rejoin', (g) => {
+            if (g && g.id === route.gameId) {
+              setGame(g);
+              setSpectating(false);
+            } else {
+              window.location.hash = '';
+            }
+            setLoading(false);
+          });
+          setTimeout(() => setLoading(false), 3000);
+        } else {
+          // Normal rejoin attempt
+          socket.emit('rejoin');
+          socket.once('game:rejoin', (g) => {
+            if (g) {
+              setGame(g);
+              setSpectating(false);
+              window.location.hash = `/game/${g.id}`;
+            }
+            setLoading(false);
+          });
+          setTimeout(() => setLoading(false), 3000);
+        }
+      })
+      .catch(() => { setToken(null); localStorage.removeItem('token'); setLoading(false); });
   }, [token]);
 
   const handleLogin = (t, u) => {
@@ -45,13 +84,29 @@ function App() {
     setUser(null);
     setGame(null);
     setSpectating(false);
+    window.location.hash = '';
     disconnectSocket();
   };
 
-  const handleGameStart = (g) => { setGame(g); setSpectating(false); };
-  const handleSpectate = (g) => { setGame(g); setSpectating(true); };
-  const handleGameUpdate = () => {}; // Game manages its own state now
-  const handleBackToLobby = () => { setGame(null); setSpectating(false); };
+  const handleGameStart = (g) => {
+    setGame(g);
+    setSpectating(false);
+    window.location.hash = `/game/${g.id}`;
+  };
+
+  const handleSpectate = (g) => {
+    setGame(g);
+    setSpectating(true);
+    window.location.hash = `/spectate/${g.id}`;
+  };
+
+  const handleGameUpdate = () => {};
+
+  const handleBackToLobby = () => {
+    setGame(null);
+    setSpectating(false);
+    window.location.hash = '';
+  };
 
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', color: '#999' }}>加载中...</div>;

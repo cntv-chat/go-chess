@@ -66,9 +66,44 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
     const handleReconnect = () => {
       if (spectating && gameIdRef.current) {
         socket.emit('spectate', { gameId: gameIdRef.current });
+      } else {
+        socket.emit('rejoin');
+        socket.once('game:rejoin', (g) => {
+          if (g) {
+            setGame(g);
+            if (g.timer) setTimer(g.timer);
+          }
+        });
       }
     };
     socket.on('connect', handleReconnect);
+
+    // Handle mobile tab switch (visibility change)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (!socket.connected) {
+          socket.connect();
+        } else {
+          // Already connected, just re-sync state
+          if (spectating && gameIdRef.current) {
+            socket.emit('spectate', { gameId: gameIdRef.current });
+            socket.once('game:start', (g) => {
+              setGame(g);
+              if (g.timer) setTimer(g.timer);
+            });
+          } else {
+            socket.emit('rejoin');
+            socket.once('game:rejoin', (g) => {
+              if (g) {
+                setGame(g);
+                if (g.timer) setTimer(g.timer);
+              }
+            });
+          }
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     const handleUpdate = (g) => {
       // Sound effects
@@ -112,6 +147,7 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
       socket.off('game:timer', handleTimer);
       socket.off('game:spectators', handleSpectators);
       socket.off('connect', handleReconnect);
+      document.removeEventListener('visibilitychange', handleVisibility);
       if (spectating) socket.emit('leave:spectate');
     };
   }, [token, spectating]);
