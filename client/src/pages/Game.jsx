@@ -61,6 +61,14 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
   useEffect(() => {
     const socket = getSocket(token);
 
+    // Rejoin spectate room on reconnect
+    const handleReconnect = () => {
+      if (spectating && initialGame?.id) {
+        socket.emit('spectate', { gameId: initialGame.id });
+      }
+    };
+    socket.on('connect', handleReconnect);
+
     const handleUpdate = (g) => {
       // Sound effects
       if (g.moves && g.moves.length > prevMovesLen.current) {
@@ -104,9 +112,10 @@ export default function Game({ user, token, game: initialGame, onGameUpdate, onB
       socket.off('error', handleError);
       socket.off('game:timer', handleTimer);
       socket.off('game:spectators', handleSpectators);
+      socket.off('connect', handleReconnect);
       if (spectating) socket.emit('leave:spectate');
     };
-  }, [token, onGameUpdate, spectating]);
+  }, [token, onGameUpdate, spectating, initialGame?.id]);
 
   const handleMove = useCallback((x, y) => {
     if (spectating) return;

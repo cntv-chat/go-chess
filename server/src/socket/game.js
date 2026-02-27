@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 
 const games = new Map();
 const waitingPlayers = new Map();
-const onlineUsers = new Map(); // socketId -> { id, username, rating }
+const onlineUsers = new Map(); // oderId -> { id, username, rating, sockets: Set }
 const gameTimers = new Map(); // gameId -> intervalId
 
 // Default time limits per board size (seconds)
@@ -31,9 +31,16 @@ export function setupGameSocket(io) {
   io.on('connection', (socket) => {
     console.log(`Connected: ${socket.user.username}`);
 
-    // Track online user
-    onlineUsers.set(socket.id, { id: socket.user.id, username: socket.user.username, rating: socket.user.rating || 1500 });
-    broadcastOnlineUsers(io);
+    // Track online user (deduplicate by userId)
+    const uid = socket.user.id;
+    if (uid && uid !== 0) {
+      if (onlineUsers.has(uid)) {
+        onlineUsers.get(uid).sockets.add(socket.id);
+      } else {
+        onlineUsers.set(uid, { id: uid, username: socket.user.username, rating: socket.user.rating || 1500, sockets: new Set([socket.id]) });
+      }
+      broadcastOnlineUsers(io);
+    }
     broadcastActiveGames(io);
 
     // --- Online users ---
@@ -47,8 +54,9 @@ export function setupGameSocket(io) {
     });
 
     // --- Game history ---
-    socket.on('get:history', ({ limit } = {}) => {
-      const history = getRecentGames(limit || 20);
+    socket.on('get:history', (data) => {
+      const limit = (data && data.limit) || 20;
+      const history = getRecentGames(limit);
       socket.emit('game:history', history);
     });
 
@@ -275,7 +283,13 @@ export function setupGameSocket(io) {
 
     // --- Disconnect ---
     socket.on('disconnect', () => {
-      onlineUsers.delete(socket.id);
+      // Remove socket from online tracking
+      const uid = socket.user.id;
+      if (uid && uid !== 0 && onlineUsers.has(uid)) {
+        const entry = onlineUsers.get(uid);
+        entry.sockets.delete(socket.id);
+        if (entry.sockets.size === 0) onlineUsers.delete(uid);
+      }
       broadcastOnlineUsers(io);
 
       for (const [size, s] of waitingPlayers) {
@@ -424,7 +438,7 @@ function persistGame(game) {
 
 // --- Helpers ---
 function getOnlineList() {
-  return Array.from(onlineUsers.values()).filter(u => u.id !== 0);
+  return Array.from(onlineUsers.values()).map(u => ({ id: u.id, username: u.username, rating: u.rating }));
 }
 
 function getActiveGamesList() {
